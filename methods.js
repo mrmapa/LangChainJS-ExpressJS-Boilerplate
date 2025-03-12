@@ -1,93 +1,69 @@
 import { OpenAI } from "langchain/llms"
 import {
-  ChatPromptTemplate,
   HumanMessagePromptTemplate,
   PromptTemplate,
   SystemMessagePromptTemplate,
 } from "langchain/prompts"
-import { ChatOpenAI } from "langchain/chat_models"
-import { HumanChatMessage, SystemChatMessage } from "langchain/schema"
+import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { LLMChain } from "langchain/chains"
 import { PassThrough } from "stream"
 import { CallbackManager } from "langchain/callbacks"
 
 export const methods = [
   {
-    id: "chat-translation",
-    route: "/chat-translate",
+    id: "call-model",
+    route: "/call-model",
     method: "post",
     description:
-      "Translates a text from one language to another using a chat model.",
-    inputVariables: ["Input Language", "Output Language", "Text"],
+      "Calls the Gemini API.",
+    inputVariables: ["Input", "Message_History", "Name", "Age", "Height_Feet", "Height_Inches", "Weight"],
     execute: async (input) => {
-      const chat = new ChatOpenAI({ temperature: 0 })
-
-      const translationPrompt = ChatPromptTemplate.fromPromptMessages([
-        SystemMessagePromptTemplate.fromTemplate(
-          "You are a helpful assistant that translates {Input Language} to {Output Language}."
-        ),
-        HumanMessagePromptTemplate.fromTemplate("{Text}"),
-      ])
-
-      const chain = new LLMChain({ llm: chat, prompt: translationPrompt })
-      const res = await chain.call(input)
-
-      return res
-    },
-  },
-  {
-    id: "translation",
-    route: "/translate",
-    method: "post",
-    description: "Translates a text from one language to another",
-    inputVariables: ["Input Language", "Output Language", "Text"],
-    execute: async (input) => {
-      const llm = new OpenAI({ temperature: 0 })
-
-      const template =
-        "Translate the following text from {Input Language} to {Output Language}\n```{Text}```\n\n"
-      const prompt = new PromptTemplate({
-        template,
-        inputVariables: Object.keys(input),
-      })
-      const chain = new LLMChain({ llm, prompt })
-      const res = await chain.call(input)
-      return res
-    },
-  },
-  {
-    id: "poem",
-    route: "/poem",
-    method: "post",
-    description: "Generates a short poem about your topic (Use as stream)",
-    inputVariables: ["Topic"],
-    execute: async (input) => {
-      const outputStream = new PassThrough()
-
-      const callbackManager = CallbackManager.fromHandlers({
-        async handleLLMNewToken(token) {
-          outputStream.write(token)
-        },
-      })
-      const llm = new OpenAI({
+      const chat = new ChatGoogleGenerativeAI({
+        model: "gemini-2.0-flash",
         temperature: 0,
-        streaming: true,
-        callbackManager,
-      })
+        maxRetries: 2,
+        apiKey: process.env.GEMINI_API_KEY
+      });
 
-      const template = "Write me very short a poem about {Topic}."
-      const prompt = new PromptTemplate({
-        template,
-        inputVariables: Object.keys(input),
-      })
-      const chain = new LLMChain({ llm, prompt })
+      // parse message history
+      const history = input['Message_History'].split("|");
+      let messages = [];
 
-      chain.call(input).then((response) => {
-        console.log(response)
-        outputStream.end()
-      })
+      history.slice(0, -1).forEach((element) => {
+        let role_msg = element.split('^');
+        if (role_msg[0] == 'user') {
+          let new_msg = new HumanMessage(role_msg[1]);
+          messages.push(new_msg);
+        }
+        else {
+          let new_msg = new AIMessage(role_msg[1]);
+          messages.push(new_msg);
+        }
+      });
+      console.log(input);
+      console.log(messages);
 
-      return { stream: outputStream }
+      input['msgs'] = messages;
+
+      const prompt = ChatPromptTemplate.fromMessages([
+              [
+                "system",
+               `You will be functioning as a chatbot called Connexx Bot designed for helping a user become more active.
+                User's full name is {Name}. Always address the user by using their first name. User's age is {Age}.
+                Always reference user's age when it makes sense in your answer. User's height is {Height_Feet} feet, {Height_Inches} inches.
+                Always reference user's height when it makes sense in your answer. User's weight is {Weight}.
+                Always reference user's weight if it makes sense in your answer.
+                Always keep the subject around fitness and subtopics around fitness. If subject is not under this scope respond with "Sorry, I can't help with that."`,
+              ],
+              new MessagesPlaceholder("msgs"),
+              ["human", "{Input}"],
+            ]);
+      const chain = new LLMChain({ llm: chat, prompt: prompt })
+      const res = await chain.call(input);
+
+      return res
     },
-  },
+  }
 ]
