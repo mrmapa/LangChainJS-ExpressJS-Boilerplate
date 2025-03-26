@@ -76,7 +76,7 @@ export const methods = [
                After the user is happy with the schedule, ask the user if they would like you to generate a link that can be added to their Google Calendar. If they say yes,
                ask the user how many weeks they would like the schedule to go for, then generate a single google calendar invite. Modify the timestamps to match the timezone
                of the user.
-               This should always be at the end of the response and formatted as a JSON snippet:
+               This should always be at the end of the response and formatted as a single JSON snippet:
                {{
                 "title": "Name of event",
                 "description": "Description",
