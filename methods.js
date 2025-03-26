@@ -80,13 +80,13 @@ export const methods = [
                {{
                 "title": "Name of event",
                 "description": "Description",
-                "startTime": "YYYYMMDDTHHMMSSZ",
-                "endTime": "YYYYMMDDTHHMMSSZ",
+                "startTime": "YYYYMMDDTHHMMSS",
+                "endTime": "YYYYMMDDTHHMMSS",
                 "location": "Location",
                 "recurrence": {{
                   "frequency": "WEEKLY",
                   "days": ["MO", "WE", "FR"],
-                  "until": "YYYYMMDDTHHMMSSZ"
+                  "until": "YYYYMMDDTHHMMSS"
                 }}
               }}
                 
