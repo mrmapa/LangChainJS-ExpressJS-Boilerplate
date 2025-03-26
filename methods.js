@@ -27,6 +27,8 @@ export const methods = [
         apiKey: process.env.GEMINI_API_KEY
       });
 
+      console.log("API Called");
+
       // parse message history
       const history = input['Message_History'].split("|");
       let messages = [];
@@ -55,27 +57,29 @@ export const methods = [
                Always reference user's weight if it makes sense in your answer.
                Always keep the subject around fitness and subtopics around fitness.
                If subject is not under this scope respond with "Sorry, I can't help with that."
-               Offer to create a workout schedule if it makes sense in your answer. If the user requests a schedule, response should include "Here is your proposed schedule:"
+               Offer to create a workout schedule if it makes sense in your answer. If the user requests a schedule, response should include "Here is your proposed schedule:".
                Make sure any schedule given repeats at a regular interval.
                If a schedule is created, generate a single google calendar invite. This should always be at the end of the response and formatted as a JSON snippet:
-               {
-                "title": "{Name of event}",
-                "description": "{Description}",
-                "startTime": "{YYYYMMDDTHHMMSSZ}",
-                "endTime": "{YYYYMMDDTHHMMSSZ}",
-                "location": "{Location}",
-                "recurrence": {
+               {{
+                "title": "Name of event",
+                "description": "Description",
+                "startTime": "YYYYMMDDTHHMMSSZ",
+                "endTime": "YYYYMMDDTHHMMSSZ",
+                "location": "Location",
+                "recurrence": {{
                   "frequency": "WEEKLY",
                   "days": ["MO", "WE", "FR"],
                   "until": "YYYYMMDDTHHMMSSZ"
-                }
-              }`
+                }}
+              }}`
               ],
               new MessagesPlaceholder("msgs"),
               ["human", "{Input}"],
             ]);
       const chain = new LLMChain({ llm: chat, prompt: prompt })
-      let res = await chain.call(input);
+      const res = await chain.call(input);
+
+      console.log(res);
 
       return res
     },
