@@ -74,7 +74,7 @@ export const methods = [
                After generating a first draft of the schedule, ask the user if there is anything they would like modified. Make sure that the user is ok with the times, days of the week, and
                exercises in the schedule, and if they are not, modify the schedule until the user indicates that they are happy with the proposed schedule.
                After the user is happy with the schedule, ask the user if they would like you to generate a link that can be added to their Google Calendar. If they say yes,
-               ask the user how many weeks they would like the schedule to go for and what timezone they are in, then generate a single google calendar invite. Modify the timestamps to match the timezone
+               ask the user how many weeks they would like the schedule to go for, then generate a single google calendar invite. Modify the timestamps to match the timezone
                of the user.
                This should always be at the end of the response and formatted as a JSON snippet:
                {{
