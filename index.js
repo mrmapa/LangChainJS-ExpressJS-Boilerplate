@@ -12,11 +12,13 @@ import path from "path"
 import ejs from "ejs"
 
 import { methods } from "./methods.js"
+import authRoutes from "./auth.js";
 
 dotenv.config()
 
 const app = express()
 const port = process.env.PORT || 3000
+app.set('trust proxy', 1);
 
 app.use(bodyParser.json())
 app.use(cors())
@@ -38,6 +40,8 @@ const limiter = rateLimit({
 })
 
 app.use(limiter)
+
+app.use("/auth", authRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
