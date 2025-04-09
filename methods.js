@@ -1,15 +1,15 @@
-import { OpenAI } from "langchain/llms"
-import {
-  HumanMessagePromptTemplate,
-  PromptTemplate,
-  SystemMessagePromptTemplate,
-} from "langchain/prompts"
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
 import { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import { LLMChain } from "langchain/chains"
-import { PassThrough } from "stream"
-import { CallbackManager } from "langchain/callbacks"
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { TaskType } from "@google/generative-ai";
+import "cheerio";
+import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
+import { Document } from "@langchain/core/documents";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { pull } from "langchain/hub";
+import { Annotation, StateGraph } from "@langchain/langgraph";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
 export const methods = [
   {
@@ -26,8 +26,6 @@ export const methods = [
         maxRetries: 2,
         apiKey: process.env.GEMINI_API_KEY
       });
-
-      console.log("API Called");
 
       // parse message history
       const history = input['Message_History'].split("|");
@@ -52,17 +50,14 @@ export const methods = [
       const day = date.getDate();
       const month = date.getMonth() + 1; // The month index starts from 0
       const year = date.getFullYear();
-      
-      let currentDate = `${day}/${month}/${year}`;
-      console.log(currentDate);
 
       const prompt = ChatPromptTemplate.fromMessages([
               [
                 "system",
                `You will be functioning as a chatbot called Connexx Bot designed for helping a user become more active.
-               User's full name is {Name}. Always address the user by using their first name. User's age is {Age}.
-               Always reference user's age when it makes sense in your answer. User's height is {Height_Feet} feet, {Height_Inches} inches.
-               Always reference user's height when it makes sense in your answer. User's weight is {Weight}.
+               User's full name is ${input['Name']}. Always address the user by using their first name. User's age is ${input['Age']}.
+               Always reference user's age when it makes sense in your answer. User's height is ${input['Height_Feet']} feet, ${input['Height_Inches']}inches.
+               Always reference user's height when it makes sense in your answer. User's weight is ${input['Weight']}.
                Always reference user's weight if it makes sense in your answer.
                Always keep the subject around fitness and subtopics around fitness.
                If subject is not under this scope respond with "Sorry, I can't help with that."
@@ -93,14 +88,87 @@ export const methods = [
               After generating a schedule, ask the user if there is anything else you could help them with.`
               ],
               new MessagesPlaceholder("msgs"),
-              ["human", "{Input}"],
+              ["human", input['Input']],
             ]);
-      const chain = new LLMChain({ llm: chat, prompt: prompt })
-      const res = await chain.call(input);
+
+      const chain = prompt.pipe(chat);
+      const res = await chain.invoke({msgs: input['msgs']});
 
       console.log(res);
 
       return res
+    },
+  },
+  {
+    id: "call-model-rag",
+    route: "/call-model-rag",
+    method: "post",
+    description:
+      "Calls the Gemini API.",
+    inputVariables: ["Input", "Message_History", "Name", "Age", "Height_Feet", "Height_Inches", "Weight"],
+    execute: async (input) => {
+      // Load and chunk contents of blog
+      const pTagSelector = "p";
+      const cheerioLoader = new CheerioWebBaseLoader(
+        "https://lilianweng.github.io/posts/2023-06-23-agent/",
+        {
+          selector: pTagSelector
+        }
+      );
+
+      const docs = await cheerioLoader.load();
+
+      const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 1000, chunkOverlap: 200
+      });
+      const allSplits = await splitter.splitDocuments(docs);
+
+
+      // Index chunks
+      await vectorStore.addDocuments(allSplits)
+
+      // Define prompt for question-answering
+      const promptTemplate = await pull<ChatPromptTemplate>("rlm/rag-prompt");
+
+      // Define state for application
+      const InputStateAnnotation = Annotation.Root({
+        question: Annotation<string>,
+      });
+
+      const StateAnnotation = Annotation.Root({
+        question: Annotation<string>,
+        context: Annotation<Document[]>,
+        answer: Annotation<string>,
+      });
+
+      // Define application steps
+      const retrieve = async (state: typeof InputStateAnnotation.State) => {
+        const retrievedDocs = await vectorStore.similaritySearch(state.question)
+        return { context: retrievedDocs };
+      };
+
+
+      const generate = async (state: typeof StateAnnotation.State) => {
+        const docsContent = state.context.map(doc => doc.pageContent).join("\n");
+        const messages = await promptTemplate.invoke({ question: state.question, context: docsContent });
+        const response = await llm.invoke(messages);
+        return { answer: response.content };
+      };
+
+
+      // Compile application and test
+      const graph = new StateGraph(StateAnnotation)
+        .addNode("retrieve", retrieve)
+        .addNode("generate", generate)
+        .addEdge("__start__", "retrieve")
+        .addEdge("retrieve", "generate")
+        .addEdge("generate", "__end__")
+        .compile();
+
+        let inputs = { question: "What is Task Decomposition?" };
+
+        const result = await graph.invoke(inputs);
+        console.log(result.answer);
     },
   }
 ]
